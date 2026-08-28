@@ -1,0 +1,56 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "role_attr", "attributes": [{ "CLAIM": "role" }] },
+      { "name": "anonymous_attr", "attributes": [{ "GLOBAL": "ANONYMOUS" }] }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "public_description",
+        "objects": [{ "ROUTE": "/description" }]
+      },
+      {
+        "name": "all_api",
+        "objects": [
+          { "ROUTE": "/health" },
+          { "ROUTE": "/shell-descriptors" },
+          { "ROUTE": "/shell-descriptors/*" },
+          { "ROUTE": "/submodel-descriptors" },
+          { "ROUTE": "/submodel-descriptors/*" },
+          { "ROUTE": "/lookup/shells" },
+          { "ROUTE": "/lookup/shells/*" },
+          { "ROUTE": "/lookup/shellsByAssetLink" },
+          { "ROUTE": "/shells" },
+          { "ROUTE": "/shells/*" },
+          { "ROUTE": "/submodels" },
+          { "ROUTE": "/submodels/*" },
+          { "ROUTE": "/concept-descriptions" },
+          { "ROUTE": "/concept-descriptions/*" },
+          { "ROUTE": "/upload" }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      { "name": "anonymous_read", "acl": { "USEATTRIBUTES": "anonymous_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      {
+        "name": "admin_full",
+        "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "is_authorized",
+        "formula": {
+          "$or": [
+            { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" }] },
+            { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "sync" }] }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description"], "FORMULA": { "$boolean": true } },
+      { "USEACL": "admin_full", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_authorized" }
+    ]
+  }
+}

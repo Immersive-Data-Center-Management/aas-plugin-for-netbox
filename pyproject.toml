@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-aas-integration"
+version = "0.1.0"
+description = "NetBox plugin for Asset Administration Shell (AAS) integration"
+requires-python = ">=3.12"
+authors = [
+    {name = "ApeiroRA IDCM team", email = "ApeiroRA_IDCM_PM@sap.com"}
+]
+license = {text = "Apache-2.0"}
+keywords = ["netbox", "aas", "digital-twin"]
+
+dependencies = [
+    "Django==6.1",
+    "requests==2.34.2",
+    "basyx-python-sdk==2.1.0",
+    "jsonpath-ng==1.8.0",
+    "cryptography==50.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-django==4.14.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Immersive-Data-Center-Management/aas-plugin-for-netbox"
+Documentation = "https://github.com/Immersive-Data-Center-Management/aas-plugin-for-netbox#readme"
+Issues = "https://github.com/Immersive-Data-Center-Management/aas-plugin-for-netbox/issues"
+Source = "https://github.com/Immersive-Data-Center-Management/aas-plugin-for-netbox"
+
+# NetBox plugin entry point
+[project.entry-points."netbox.plugins"]
+aas_integration = "aas_integration:AASIntegrationConfig"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aas_integration*"]
+
+[tool.setuptools.package-data]
+aas_integration = ["templates/**/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["aas_integration/tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+console_output_style = "progress"
+markers = [
+    "django_db: Mark test as requiring database access",
+]
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "--reuse-db",
+]
+
+[tool.coverage.run]
+source = ["aas_integration"]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+    "setup.py",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+precision = 2
+show_missing = true
+skip_covered = false

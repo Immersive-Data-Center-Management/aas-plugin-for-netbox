@@ -1,0 +1,66 @@
+{% extends "base/layout.html" %}
+
+{% block title %}{% if is_edit %}Edit{% else %}Create{% endif %} Field Mapping{% endblock %}
+
+{% block content %}
+<h1>{% if is_edit %}Edit{% else %}Create{% endif %} Field Mapping</h1>
+
+{% if configuration %}
+<div class="alert alert-info">
+  Configuration: <strong>{{ configuration.template.name }}</strong> for <code>{{ configuration.entity_type }}</code>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header">
+    <h5>Mapping Details</h5>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+
+      {% for field in form %}
+      <div class="form-group">
+        <label for="{{ field.id_for_label }}">
+          {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+        </label>
+        {% if preselected_element and field.name == 'submodel_element' %}
+          {{ field }}
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              var elementField = document.getElementById('{{ field.id_for_label }}');
+              if (elementField) {
+                elementField.disabled = true;
+                elementField.style.backgroundColor = '#e9ecef';
+              }
+            });
+          </script>
+        {% else %}
+          {{ field }}
+        {% endif %}
+        {% if field.help_text %}
+        <small class="form-text text-muted">{{ field.help_text }}</small>
+        {% endif %}
+        {% if field.errors %}
+        <div class="invalid-feedback d-block">
+          {% for error in field.errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        <strong>Errors:</strong>
+        {{ form.non_field_errors }}
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary">{% if is_edit %}Update{% else %}Create{% endif %} Mapping</button>
+      {% if configuration %}
+      <a href="{% url 'plugins:aas_integration:submodelconfiguration_detail' configuration.pk %}" class="btn btn-secondary">Cancel</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

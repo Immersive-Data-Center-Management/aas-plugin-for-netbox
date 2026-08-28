@@ -1,0 +1,334 @@
+# Docker Compose Test Profile
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.test.yml up
+#
+# This overlay creates isolated test services alongside the dev environment:
+# - Test database (test_netbox, test_keycloak)
+# - Test Keycloak realm (test-realm)
+# - Test BaSyx services (ports 9081-9084)
+# - Test NetBox instance (port 9085)
+
+services:
+  # Test PostgreSQL - Isolated test databases
+  postgres-test:
+    image: postgres:18-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-test-data:/var/lib/postgresql
+      - ./postgres/00-init-test-dbs.sql:/docker-entrypoint-initdb.d/00-init-test-dbs.sql:ro
+      - ./postgres/10-keycloak.sql:/docker-entrypoint-initdb.d/10-keycloak.sql:ro
+      - ./postgres/11-keycloak-test.sql:/docker-entrypoint-initdb.d/11-keycloak-test.sql:ro
+    networks:
+      - netbox-test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Test Keycloak - Uses test database, creates test-realm
+  keycloak-test:
+    image: keycloak/keycloak:26.7@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres-test:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HEALTH_ENABLED: true
+      KC_METRICS_ENABLED: true
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "9080:8080"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    networks:
+      - netbox-test
+    healthcheck:
+      test: "{ printf >&3 'GET /health/ready HTTP/1.0\r\nHost: localhost\r\n\r\n'; cat <&3; } 3<>/dev/tcp/localhost/9000 | head -1 | grep 200"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  # Test BaSyx Configuration Service - Required to initialize database schema
+  basyx-config-test:
+    image: eclipsebasyx/basyxconfigurationservice-go:1.0@sha256:2e941f1eb7934daedd0939336fd28b5db4d20b9110082d8957a75e4ad134fa6f
+    environment:
+      - POSTGRES_HOST=postgres-test
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas_test
+      - POSTGRES_PASSWORD=aas_test
+      - POSTGRES_DBNAME=aas_test
+    restart: "no"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    networks:
+      - netbox-test
+
+  # Test BaSyx AAS Environment
+  aas-env-test:
+    image: eclipsebasyx/aasenvironment-go:1.0@sha256:567ba40ea5c0b152e404fa9d51de2058f28e1205b7abf8d4167d893e08701697
+    environment:
+      - SERVER_PORT=8081
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=postgres-test
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas_test
+      - POSTGRES_PASSWORD=aas_test
+      - POSTGRES_DBNAME=aas_test
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=100
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist-test.json
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://localhost:9081
+    volumes:
+      - ./basyx/:/security_env
+    ports:
+      - "9081:8081"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      keycloak-test:
+        condition: service_healthy
+      basyx-config-test:
+        condition: service_completed_successfully
+    networks:
+      - netbox-test
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8081/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Test BaSyx AAS Registry
+  aas-registry-test:
+    image: eclipsebasyx/aasregistry-go:1.0@sha256:60e8c7845ea9e2e30a086a6571639e7cf119ebf78c819874de12c6543299a1d1
+    environment:
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=postgres-test
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas_test
+      - POSTGRES_PASSWORD=aas_test
+      - POSTGRES_DBNAME=aas_test
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=100
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist-test.json
+    volumes:
+      - ./basyx/:/security_env
+    ports:
+      - "9082:8080"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      keycloak-test:
+        condition: service_healthy
+      basyx-config-test:
+        condition: service_completed_successfully
+    networks:
+      - netbox-test
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:5000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Test Submodel Registry
+  sm-registry-test:
+    image: eclipsebasyx/submodelregistry-go:1.0@sha256:ab60be58ff6adce32eb14f0d9692e50d4058b9d20d1a3e84bf5779cc6d787fb9
+    environment:
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=postgres-test
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas_test
+      - POSTGRES_PASSWORD=aas_test
+      - POSTGRES_DBNAME=aas_test
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=100
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist-test.json
+    volumes:
+      - ./basyx/:/security_env
+    ports:
+      - "9083:8080"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      keycloak-test:
+        condition: service_healthy
+      basyx-config-test:
+        condition: service_completed_successfully
+    networks:
+      - netbox-test
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:5004/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Test AAS Discovery
+  aas-discovery-test:
+    image: eclipsebasyx/aasdiscovery-go:1.0@sha256:a004bca42839cbed35042c259e36122694ae756bdfabb46dee74be5ddc9867c3
+    environment:
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=postgres-test
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas_test
+      - POSTGRES_PASSWORD=aas_test
+      - POSTGRES_DBNAME=aas_test
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=100
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist-test.json
+    volumes:
+      - ./basyx/:/security_env
+    ports:
+      - "9084:8080"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      keycloak-test:
+        condition: service_healthy
+      basyx-config-test:
+        condition: service_completed_successfully
+    networks:
+      - netbox-test
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:5004/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Remove MongoDB - not needed with PostgreSQL storage
+  # mongo-test service removed
+
+  # Test Redis - Cache for test NetBox
+  netbox-redis-test:
+    image: redis:8-alpine@sha256:8096655e437712b07503796fb64d81359256cfcff0ab29d95a7da72863786efb
+    networks:
+      - netbox-test
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Test NetBox - Uses test database
+  netbox-test:
+    build:
+      context: .
+      dockerfile: dockerfiles/netbox.Dockerfile
+    command: >
+      sh -c "cd /opt/netbox/netbox/plugins &&
+             /usr/local/bin/uv pip install --python /opt/netbox/venv/bin/python -e '.[test]' &&
+             cd /opt/netbox/netbox &&
+             /opt/netbox/docker-entrypoint.sh /opt/netbox/netbox/manage.py runserver 0.0.0.0:8080 --insecure"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      netbox-redis-test:
+        condition: service_healthy
+    environment:
+      # Test database configuration
+      DB_NAME: netbox_test
+      DB_USER: netbox_test
+      DB_PASSWORD: netbox_test
+      DB_HOST: postgres-test
+      DB_WAIT_DEBUG: "1"
+
+      # NetBox configuration
+      SECRET_KEY: test-secret-key-for-integration-tests-do-not-use-in-production-0123456789abcdef
+      PYTHONPATH: /opt/netbox/netbox/plugins
+
+      # Redis
+      REDIS_HOST: netbox-redis-test
+
+      # Test-specific settings
+      SUPERUSER_NAME: admin
+      SUPERUSER_EMAIL: admin@test.local
+      SUPERUSER_PASSWORD: admin
+      SUPERUSER_API_TOKEN: test-token-0123456789abcdef0123456789abcdef01234567
+
+      # Disable certain features for testing
+      SKIP_SUPERUSER: false
+
+      # API token configuration
+      API_TOKEN_PEPPERS: test-pepper-abcdefghijklmnopqrstuvwxyz0123456789
+
+    ports:
+      - "9085:8080"
+    volumes:
+      - ./netbox/configuration.py:/etc/netbox/config/configuration.py:ro
+      - ./netbox/plugins.py:/etc/netbox/config/plugins.py:ro
+      - ../:/opt/netbox/netbox/plugins
+    networks:
+      - netbox-test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/login/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # Test NetBox Worker
+  netbox-worker-test:
+    build:
+      context: .
+      dockerfile: dockerfiles/netbox.Dockerfile
+    depends_on:
+      - netbox-test
+    command: /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker
+    environment:
+      DB_NAME: netbox_test
+      DB_USER: netbox_test
+      DB_PASSWORD: netbox_test
+      DB_HOST: postgres-test
+      REDIS_HOST: netbox-redis-test
+      API_TOKEN_PEPPERS: test-pepper-abcdefghijklmnopqrstuvwxyz0123456789
+    volumes:
+      - ./netbox/configuration.py:/etc/netbox/config/configuration.py:ro
+      - ./netbox/plugins.py:/etc/netbox/config/plugins.py:ro
+      - ../:/opt/netbox/netbox/plugins
+    networks:
+      - netbox-test
+
+networks:
+  netbox-test:
+    name: netbox-test
+    driver: bridge
+
+volumes:
+  postgres-test-data:

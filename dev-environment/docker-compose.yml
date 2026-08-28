@@ -1,0 +1,398 @@
+services:
+  # Keycloak Authentication Service
+  keycloak:
+    image: keycloak/keycloak:26.7@sha256:831330513f55695572286e521f94fcd3c7e285250ed5b848090265a33192f669
+    container_name: keycloak
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HEALTH_ENABLED: true
+      KC_METRICS_ENABLED: true
+      KC_FEATURE_HOSTNAME: v2
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+    command:
+      - start-dev
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: "{ printf >&3 'GET /health/ready HTTP/1.0\r\nHost: localhost\r\n\r\n'; cat <&3; } 3<>/dev/tcp/localhost/9000 | head -1 | grep 200"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+      - "aas.localhost:host-gateway"
+    ports:
+      - "8080:8080"
+
+  postgres:
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres:/docker-entrypoint-initdb.d/
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+
+  # BaSyx Configuration Service (must start before other BaSyx services)
+  basyx-config:
+    image: eclipsebasyx/basyxconfigurationservice-go:1.0@sha256:cfab9442ca4ba336c56aab73ede462812596e7778aecfad022f02d944abce10f
+    container_name: basyx-config
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas
+      - POSTGRES_PASSWORD=aas
+      - POSTGRES_DBNAME=aas
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # BaSyx AAS Services (Production)
+  aas-env:
+    image: eclipsebasyx/aasenvironment-go:1.0@sha256:cfef4de8c91e8b592f5ba8c32aa7590ff164edc0072f75d9a2912932516010e3
+    container_name: aas-env
+    environment:
+      - SERVER_PORT=8081
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas
+      - POSTGRES_PASSWORD=aas
+      - POSTGRES_DBNAME=aas
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - ABAC_POLICY_FILE_IMPORT=always
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      # Enable automatic descriptor sync from the environment/repository
+      # to the AAS Registry, Submodel Registry and Discovery Service.
+      # These services share the same PostgreSQL DB, so the "sync" is
+      # performed via shared tables; externalUrl is embedded in the
+      # published descriptor endpoints so clients resolved via the
+      # registries can reach the shells/submodels served here.
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://localhost:8081
+    volumes:
+      - ./basyx/:/security_env
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      basyx-config:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8081/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+      - "aas.localhost:host-gateway"
+    ports:
+      - "8081:8081"
+
+  aas-discovery:
+    image: eclipsebasyx/aasdiscovery-go:1.0@sha256:07270eb8a4aad167b7b44e160269148692a04d543a729aedaadf4ca9a46d3566
+    container_name: aas-discovery
+    environment:
+      - SERVER_PORT=8080
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas
+      - POSTGRES_PASSWORD=aas
+      - POSTGRES_DBNAME=aas
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+    volumes:
+      - ./basyx:/security_env
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      basyx-config:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+      - "aas.localhost:host-gateway"
+    ports:
+      - "8084:8080"
+
+  aas-registry:
+    image: eclipsebasyx/aasregistry-go:1.0@sha256:a49067a9e0ccaf6c72f79e5460479ade9c042effcbd3b11e9e7692f8caac9741
+    container_name: aas-registry
+    command: ["/app/aasregistryservice"]
+    environment:
+      - SERVER_PORT=8080
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas
+      - POSTGRES_PASSWORD=aas
+      - POSTGRES_DBNAME=aas
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+    volumes:
+      - ./basyx/:/security_env
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      basyx-config:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+      - "aas.localhost:host-gateway"
+    ports:
+      - "8082:8080"
+
+  sm-registry:
+    image: eclipsebasyx/submodelregistry-go:1.0@sha256:3e12c104606d745994daea299287f8b4f65e95764175e1993a677cf4e3adaf9c
+    container_name: sm-registry
+    command: ["/app/submodelregistryservice"]
+    environment:
+      - SERVER_PORT=8080
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=aas
+      - POSTGRES_PASSWORD=aas
+      - POSTGRES_DBNAME=aas
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+    volumes:
+      - ./basyx/:/security_env
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      basyx-config:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+      - "aas.localhost:host-gateway"
+    ports:
+      - "8083:8080"
+
+  aas-web-ui:
+    image: eclipsebasyx/aas-gui:v2-260707@sha256:936aaf0d290782dd3e7dc410d2aba271f4a830153e514b4a16b083451b319065
+    container_name: aas-ui
+    environment:
+      PRIMARY_COLOR: '#89D1FF'
+      NODE_TLS_REJECT_UNAUTHORIZED: '0' # Disable TLS verification for development/testing
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      aas-env:
+        condition: service_healthy
+      aas-registry:
+        condition: service_healthy
+      sm-registry:
+        condition: service_healthy
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+      - "aas.localhost:host-gateway"
+    ports:
+      - "3000:3000"
+
+  # NetBox Services
+
+  netbox-redis:
+    image: redis:8-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576
+    container_name: netbox-redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  netbox:
+    build:
+      dockerfile: dockerfiles/netbox.Dockerfile
+    container_name: netbox
+    environment:
+      DB_NAME: netbox
+      DB_USER: netbox
+      DB_PASSWORD: netbox
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: netbox-redis
+      REDIS_PORT: 6379
+      REDIS_DB_TASKS: 0
+      REDIS_DB_CACHE: 1
+      REDIS_DB_SESSION: 2
+      SUPERUSER_NAME: admin
+      SUPERUSER_PASSWORD: admin
+      SUPERUSER_API_TOKEN: 0123456789abcdef0123456789abcdef01234567
+      ALLOWED_HOSTS: '*'
+      CSRF_TRUSTED_ORIGINS: 'http://127.0.0.1:8085 http://localhost:8085'
+      SECRET_KEY: abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789
+      API_TOKEN_PEPPER_1: abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789
+      PLUGINS: aas_integration
+      PYTHONPATH: /opt/netbox/netbox/plugins
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca.pem
+      PYTHONWARNINGS: 'ignore::UserWarning'
+      # Debug: Ensure Python output is not buffered for real-time logging
+      PYTHONUNBUFFERED: '1'
+    volumes:
+      - netbox-media:/opt/netbox/netbox/media
+      - netbox-etc-media:/etc/netbox/media
+      - netbox-reports:/opt/netbox/netbox/reports
+      - ../aas_integration:/opt/netbox/netbox/plugins/aas_integration
+      - ./netbox/plugins.py:/etc/netbox/config/plugins.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      start_period: 5m
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      netbox-redis:
+        condition: service_healthy
+    ports:
+      - "8085:8080"
+      - "5678:5678"  # Debug: debugpy remote debugging port for VS Code
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+      - "aas.localhost:host-gateway"
+    # Debug: Run NetBox with debugpy for remote debugging from VS Code
+    # This installs debugpy and starts the Django dev server with debug listener on port 5678
+    # See dev-environment/DEBUG_SETUP.md for usage instructions
+    # Note: We explicitly call the entrypoint script to ensure migrations and superuser creation run
+    command: >
+      /opt/netbox/docker-entrypoint.sh
+      sh -c "
+      /usr/local/bin/uv pip install --python /opt/netbox/venv/bin/python debugpy &&
+      /opt/netbox/venv/bin/python -m debugpy --listen 0.0.0.0:5678 /opt/netbox/netbox/manage.py runserver 0.0.0.0:8080 --insecure
+      "
+
+  netbox-worker:
+    build:
+      dockerfile: dockerfiles/netbox.Dockerfile
+    container_name: netbox-worker
+    environment:
+      DB_NAME: netbox
+      DB_USER: netbox
+      DB_PASSWORD: netbox
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: netbox-redis
+      REDIS_PORT: 6379
+      REDIS_DB_TASKS: 0
+      REDIS_DB_CACHE: 1
+      REDIS_DB_SESSION: 2
+      SECRET_KEY: abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789
+      API_TOKEN_PEPPERS: abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz0123456789
+      ALLOWED_HOSTS: '*'
+      CSRF_TRUSTED_ORIGINS: 'http://127.0.0.1:8085 http://localhost:8085'
+      PLUGINS: aas_integration
+      PYTHONPATH: /opt/netbox/netbox/plugins
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca.pem
+      PYTHONWARNINGS: 'ignore::UserWarning'
+    volumes:
+      - netbox-media:/opt/netbox/netbox/media
+      - netbox-etc-media:/etc/netbox/media
+      - netbox-reports:/opt/netbox/netbox/reports
+      - ../aas_integration:/opt/netbox/netbox/plugins/aas_integration
+      - ./netbox/plugins.py:/etc/netbox/config/plugins.py
+    command: /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py rqworker
+    restart: unless-stopped
+    depends_on:
+      netbox:
+        condition: service_healthy
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+      - "aas.localhost:host-gateway"
+    
+volumes:
+  postgres-data:
+  netbox-media:
+  netbox-etc-media:
+  netbox-reports:

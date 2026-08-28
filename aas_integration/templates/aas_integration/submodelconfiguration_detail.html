@@ -1,0 +1,209 @@
+{% extends "base/layout.html" %}
+
+{% block title %}Submodel Mapping Configuration: {{ configuration.template.name }}{% endblock %}
+
+{% block content %}
+<h1>Submodel Mapping Configuration: {{ configuration.template.name }}</h1>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5>Configuration Details</h5>
+      </div>
+      <div class="card-body">
+        <dl class="row">
+          <dt class="col-sm-4">Connection:</dt>
+          <dd class="col-sm-8">
+            {% if configuration.connection %}
+              <a href="{% url 'plugins:aas_integration:aasconnection_detail' configuration.connection.pk %}">
+                {{ configuration.connection.name }}
+              </a>
+            {% else %}
+              <span class="badge badge-primary">Global Default</span>
+              <br><small class="text-muted">Applies to all connections</small>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4">Entity Type:</dt>
+          <dd class="col-sm-8"><code>{{ configuration.entity_type }}</code></dd>
+
+          <dt class="col-sm-4">Template:</dt>
+          <dd class="col-sm-8">
+            <a href="{% url 'plugins:aas_integration:submodeltemplate_detail' configuration.template.pk %}">
+              {{ configuration.template.name }}
+            </a>
+            <br><small class="text-muted">{{ configuration.template.id_short }}</small>
+          </dd>
+
+          <dt class="col-sm-4">Priority:</dt>
+          <dd class="col-sm-8">{{ configuration.priority }}</dd>
+
+          <dt class="col-sm-4">Status:</dt>
+          <dd class="col-sm-8">
+            {% if configuration.is_enabled %}
+              <span class="badge badge-success">Enabled</span>
+            {% else %}
+              <span class="badge badge-secondary">Disabled</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4">Created:</dt>
+          <dd class="col-sm-8">{{ configuration.created|date:"Y-m-d H:i" }}</dd>
+
+          <dt class="col-sm-4">Last Modified:</dt>
+          <dd class="col-sm-8">{{ configuration.last_modified|date:"Y-m-d H:i" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5>Template Information</h5>
+      </div>
+      <div class="card-body">
+        <dl class="row">
+          <dt class="col-sm-4">IDTA Number:</dt>
+          <dd class="col-sm-8">{{ configuration.template.idta_number|default:"-" }}</dd>
+
+          <dt class="col-sm-4">Version:</dt>
+          <dd class="col-sm-8">{{ configuration.template.version }}.{{ configuration.template.revision }}</dd>
+
+          <dt class="col-sm-4">Semantic ID:</dt>
+          <dd class="col-sm-8"><small>{{ configuration.template.semantic_id }}</small></dd>
+
+          <dt class="col-sm-4">Source:</dt>
+          <dd class="col-sm-8">
+            {% if configuration.template.source_type == 'IDTA' %}
+              <span class="badge badge-primary">IDTA Standard</span>
+            {% elif configuration.template.source_type == 'CUSTOM' %}
+              <span class="badge badge-secondary">Custom</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4">Elements:</dt>
+          <dd class="col-sm-8">{{ configuration.template.elements.count }}</dd>
+        </dl>
+
+        <a href="{% url 'plugins:aas_integration:submodeltemplate_detail' configuration.template.pk %}" class="btn btn-sm btn-info">
+          View Full Template
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h5>Field Mappings - {{ mapped_count }} / {{ total_mappable }} mappable elements</h5>
+      </div>
+      <div class="card-body">
+        {% if elements_with_status %}
+        <table class="table table-sm table-striped">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Element</th>
+              <th>Expression/Value</th>
+              <th>Default</th>
+              <th>Element Required</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in elements_with_status %}
+            <tr{% if not item.is_mapped and item.is_element_required and not item.is_collection %} class="table-warning"{% endif %}{% if item.is_collection %} style="background-color: #f8f9fa;"{% endif %}>
+              <td>
+                {% if item.is_collection %}
+                  <span class="badge badge-info">Collection</span>
+                {% elif item.is_mapped %}
+                  <span class="badge" style="background-color: #5fea7f; color: white;">Mapped</span>
+                {% else %}
+                  <span class="badge badge-secondary">Not Mapped</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if item.depth > 0 %}
+                  <span style="margin-left: {{ item.depth|add:item.depth }}em; color: #6c757d;">└─</span>
+                {% endif %}
+                <code>{{ item.element.id_short }}</code>
+                <br>
+                {% if item.depth > 0 %}
+                  <span style="margin-left: {{ item.depth|add:item.depth }}em;"></span>
+                {% endif %}
+                <small class="text-muted">{{ item.element.element_type }}</small>
+              </td>
+              {% if item.is_collection %}
+                <td colspan="4" class="text-muted"><em>Container - map child elements below</em></td>
+              {% elif item.is_mapped %}
+                <td>
+                  {% if item.mapping.jsonpath_expression %}
+                    <code>{{ item.mapping.jsonpath_expression }}</code>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if item.mapping.default_value %}
+                    {{ item.mapping.default_value }}
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if item.is_element_required %}
+                    <span class="badge badge-danger">Required</span>
+                  {% else %}
+                    <span class="badge badge-secondary">Optional</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a href="{% url 'plugins:aas_integration:fieldmapping_edit' item.mapping.pk %}" class="btn btn-xs btn-warning" style="width: 70px;">Edit</a>
+                  <form method="post" action="{% url 'plugins:aas_integration:fieldmapping_delete' item.mapping.pk %}" style="display: inline; margin: 0;" onsubmit="return confirm('Delete this field mapping?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-xs btn-danger" style="width: 70px;">Delete</button>
+                  </form>
+                </td>
+              {% else %}
+                <td colspan="2" class="text-muted"><em>No mapping configured</em></td>
+                <td>
+                  {% if item.is_element_required %}
+                    <span class="badge badge-danger">Required</span>
+                  {% else %}
+                    <span class="badge badge-secondary">Optional</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a href="{% url 'plugins:aas_integration:fieldmapping_create' configuration.pk %}?element={{ item.element.pk }}" class="btn btn-xs btn-success" style="width: 144px;">
+                    <i class="mdi mdi-plus"></i> Add Mapping
+                  </a>
+                </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="alert alert-info">
+          No elements in template.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-3">
+  <a href="{% url 'plugins:aas_integration:submodelconfiguration_list' %}" class="btn btn-secondary">Back to Configurations</a>
+  <a href="{% url 'plugins:aas_integration:submodeltemplate_detail' configuration.template.pk %}" class="btn btn-info">View Template</a>
+  <a href="{% url 'plugins:aas_integration:submodelconfiguration_edit' configuration.pk %}" class="btn btn-warning">Edit Configuration</a>
+  <form method="post" action="{% url 'plugins:aas_integration:submodelconfiguration_delete' configuration.pk %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this mapping configuration? This will also delete all field mappings.');">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Delete Configuration</button>
+  </form>
+</div>
+{% endblock %}

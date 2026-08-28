@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "description": "Wait 7 days before proposing all non-security updates",
+      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Apply security updates immediately, bypassing the stabilisation delay",
+      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
+      "isVulnerabilityAlert": true,
+      "minimumReleaseAge": "0 days"
+    },
+    {
+      "description": "Group all BaSyx Docker image updates into a single PR",
+      "matchDatasources": ["docker"],
+      "groupName": "BaSyx Services",
+      "minimumReleaseAge": "7 days",
+      "matchPackageNames": [
+        "eclipsebasyx/{/,}**"
+      ]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  }
+}

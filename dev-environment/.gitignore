@@ -1,0 +1,5 @@
+# Test data downloads
+datasets/
+*.sql
+!aas-connection-setup.sql
+!netbox-demo-racktypes-patch.sql

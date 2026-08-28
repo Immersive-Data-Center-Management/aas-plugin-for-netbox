@@ -1,0 +1,88 @@
+{% extends "base/layout.html" %}
+
+{% block title %}AAS Connections{% endblock %}
+
+{% block content %}
+<h1>AAS Connections</h1>
+<a href="{% url 'plugins:aas_integration:aasconnection_create' %}" class="btn btn-primary">Add Connection</a>
+<a href="{% url 'plugins:aas_integration:aas_sync' %}" class="btn btn-success">Sync Assets to AAS</a>
+
+{% if connections %}
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>API URL</th>
+      <th>Status</th>
+      <th>Last Tested</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for conn in connections %}
+    <tr>
+      <td>{{ conn.name }}</td>
+      <td>{{ conn.aas_api_url }}</td>
+      <td>
+        {% if conn.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-secondary">Inactive</span>{% endif %}
+      </td>
+      <td>{{ conn.last_tested|default:"Never" }}</td>
+      <td>
+        <button class="btn btn-sm btn-success test-connection" data-id="{{ conn.id }}">Test</button>
+        <a href="{{ conn.id }}/" class="btn btn-sm btn-info">View</a>
+        <a href="{{ conn.id }}/edit/" class="btn btn-sm btn-warning">Edit</a>
+        <a href="{{ conn.id }}/delete/" class="btn btn-sm btn-danger">Delete</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No connections configured.</p>
+{% endif %}
+{% endblock %}
+
+{% block javascript %}
+<script>
+document.querySelectorAll('.test-connection').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        const originalText = this.textContent;
+        this.disabled = true;
+        this.textContent = 'Testing...';
+        
+        fetch(id + '/test/')
+            .then(r => r.json())
+            .then(data => {
+                showToast(data.success ? 'Success' : 'Error', data.message, data.success ? 'success' : 'danger');
+                this.disabled = false;
+                this.textContent = originalText;
+                if (data.success) {
+                    setTimeout(() => location.reload(), 2000);
+                }
+            })
+            .catch(e => {
+                showToast('Error', 'Failed to test connection', 'danger');
+                this.disabled = false;
+                this.textContent = originalText;
+            });
+    });
+});
+
+function showToast(title, message, type) {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show`;
+    toast.style.position = 'fixed';
+    toast.style.top = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '9999';
+    toast.style.minWidth = '300px';
+    toast.innerHTML = `
+        <strong>${title}:</strong> ${message}
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+</script>
+{% endblock %}

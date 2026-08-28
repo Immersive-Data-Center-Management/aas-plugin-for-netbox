@@ -1,0 +1,12 @@
+[
+  {
+    "issuer": "http://keycloak.localhost:8080/realms/basyx-dev",
+    "audience": "aas-ui",
+    "scopes": ["email", "profile", "role"]
+  },
+  {
+    "issuer": "http://keycloak:8080/realms/basyx-dev",
+    "audience": "aas-ui",
+    "scopes": ["email", "profile", "role"]
+  }
+]

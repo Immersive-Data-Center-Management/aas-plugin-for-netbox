@@ -1,0 +1,58 @@
+Third-Party Dependencies for aas-plugin-for-netbox
+====================================================
+
+This file lists the third-party dependencies used in this project along with their licenses.
+
+Runtime Dependencies
+--------------------
+
+Dependency: Django
+Version: 6.0.7
+License: BSD-3-Clause
+Homepage: https://github.com/django/django
+Description: High-level Python web framework
+
+Dependency: requests 
+Version: 2.34.2
+License: Apache-2.0
+Homepage: https://github.com/psf/requests
+Description: HTTP library for Python
+
+Dependency: basyx-python-sdk
+Version: 2.1.0
+License: MIT
+Homepage: https://github.com/eclipse-basyx/basyx-python-sdk
+Description: Python SDK for Eclipse BaSyx Asset Administration Shell
+
+Dependency: jsonpath-ng 
+Version: 1.8.0
+License: Apache-2.0
+Homepage: https://github.com/h2non/jsonpath-ng
+Description: JSONPath implementation for Python
+
+Dependency: cryptography
+Version: 49.0.0
+License: Apache-2.0 OR BSD-3-Clause
+Homepage: https://github.com/pyca/cryptography
+Description: Cryptographic recipes and primitives
+
+Development Dependencies
+------------------------
+
+Dependency: pytest
+Version: 9.1.1
+License: MIT
+Homepage: https://github.com/pytest-dev/pytest
+Description: Testing framework for Python
+
+Dependency: pytest-cov 
+Version: 7.1.0
+License: MIT
+Homepage: https://github.com/pytest-dev/pytest-cov
+Description: Coverage plugin for pytest
+
+Dependency: pytest-django 
+Version: 4.12.0
+License: BSD-3-Clause
+Homepage: https://github.com/pytest-dev/pytest-django
+Description: Django plugin for pytest

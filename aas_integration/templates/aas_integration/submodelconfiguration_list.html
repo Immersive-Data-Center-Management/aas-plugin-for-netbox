@@ -1,0 +1,103 @@
+{% extends "base/layout.html" %}
+
+{% block title %}Submodel Mapping Configurations{% endblock %}
+
+{% block content %}
+<h1>Submodel Mapping Configurations</h1>
+<p class="text-muted">
+  Configurations specify which submodels are enabled for which entity types and connections.
+</p>
+
+{% if global_configs %}
+<h3 class="mt-4">Global Default Configurations</h3>
+<p class="text-muted">These apply to all connections by default</p>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Entity Type</th>
+      <th>Template</th>
+      <th>Priority</th>
+      <th>Mappings</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for config in global_configs %}
+    <tr>
+      <td><code>{{ config.entity_type }}</code></td>
+      <td>
+        <strong>{{ config.template.name }}</strong><br>
+        <small class="text-muted">{{ config.template.id_short }}</small>
+      </td>
+      <td>{{ config.priority }}</td>
+      <td>{{ config.mapping_count }}</td>
+      <td>
+        {% if config.is_enabled %}
+          <span class="badge badge-success">Enabled</span>
+        {% else %}
+          <span class="badge badge-secondary">Disabled</span>
+        {% endif %}
+      </td>
+      <td>
+        <a href="{% url 'plugins:aas_integration:submodelconfiguration_detail' config.pk %}" class="btn btn-sm btn-info">View</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if connection_configs %}
+<h3 class="mt-4">Connection-Specific Configurations</h3>
+<p class="text-muted">These override global defaults for specific connections</p>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Connection</th>
+      <th>Entity Type</th>
+      <th>Template</th>
+      <th>Priority</th>
+      <th>Mappings</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for config in connection_configs %}
+    <tr>
+      <td>{{ config.connection.name }}</td>
+      <td><code>{{ config.entity_type }}</code></td>
+      <td>
+        <strong>{{ config.template.name }}</strong><br>
+        <small class="text-muted">{{ config.template.id_short }}</small>
+      </td>
+      <td>{{ config.priority }}</td>
+      <td>{{ config.mapping_count }}</td>
+      <td>
+        {% if config.is_enabled %}
+          <span class="badge badge-success">Enabled</span>
+        {% else %}
+          <span class="badge badge-secondary">Disabled</span>
+        {% endif %}
+      </td>
+      <td>
+        <a href="{% url 'plugins:aas_integration:submodelconfiguration_detail' config.pk %}" class="btn btn-sm btn-info">View</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if not global_configs and not connection_configs %}
+<div class="alert alert-warning">
+  No submodel configurations found. Run migrations to create default configurations.
+</div>
+{% endif %}
+
+<div class="mt-3">
+  <a href="{% url 'plugins:aas_integration:aasconnection_list' %}" class="btn btn-secondary">Back to Connections</a>
+  <a href="{% url 'plugins:aas_integration:submodeltemplate_list' %}" class="btn btn-secondary">View Templates</a>
+</div>
+{% endblock %}

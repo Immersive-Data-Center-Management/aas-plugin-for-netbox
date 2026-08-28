@@ -1,0 +1,70 @@
+{% extends "base/layout.html" %}
+
+{% block title %}Submodel Templates{% endblock %}
+
+{% block content %}
+<h1>Submodel Templates</h1>
+<p class="text-muted">
+  Templates define the structure and elements of AAS submodels (e.g., Nameplate, TechnicalData).
+</p>
+
+{% if templates %}
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>ID Short</th>
+      <th>IDTA Number</th>
+      <th>Version</th>
+      <th>Source</th>
+      <th>Elements</th>
+      <th>Configurations</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for template in templates %}
+    <tr>
+      <td><strong>{{ template.name }}</strong></td>
+      <td><code>{{ template.id_short }}</code></td>
+      <td>{{ template.idta_number|default:"-" }}</td>
+      <td>{{ template.version }}.{{ template.revision }}</td>
+      <td>
+        {% if template.source_type == 'IDTA' %}
+          <span class="badge badge-primary">IDTA</span>
+        {% elif template.source_type == 'CUSTOM' %}
+          <span class="badge badge-secondary">Custom</span>
+        {% else %}
+          <span class="badge badge-info">{{ template.source_type }}</span>
+        {% endif %}
+      </td>
+      <td>{{ template.element_count }}</td>
+      <td>{{ template.config_count }}</td>
+      <td>
+        {% if template.is_active %}
+          <span class="badge badge-success">Active</span>
+        {% else %}
+          <span class="badge badge-secondary">Inactive</span>
+        {% endif %}
+        {% if template.is_built_in %}
+          <span class="badge badge-info">Built-in</span>
+        {% endif %}
+      </td>
+      <td>
+        <a href="{% url 'plugins:aas_integration:submodeltemplate_detail' template.pk %}" class="btn btn-sm btn-info">View</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">
+  No submodel templates found.
+</div>
+{% endif %}
+
+<div class="mt-3">
+  <a href="{% url 'plugins:aas_integration:aasconnection_list' %}" class="btn btn-secondary">Back to Connections</a>
+</div>
+{% endblock %}

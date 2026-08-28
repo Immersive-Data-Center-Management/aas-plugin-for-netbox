@@ -1,0 +1,263 @@
+{% extends "base/layout.html" %}
+
+{% block title %}Sync Assets to AAS{% endblock %}
+
+{% block css %}
+<style>
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.btn-loading .mdi-loading {
+    animation: mdi-spin 1s linear infinite;
+}
+
+@keyframes mdi-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#sync-results {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Sync NetBox Assets to AAS</h1>
+
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Asset Synchronization</h5>
+        <p class="card-text">
+          This will create AAS (Asset Administration Shell) with submodels for all configured NetBox asset types in the selected AAS repository.
+        </p>
+        
+        <div class="alert alert-info">
+          <strong>Objects to sync:</strong>
+          <ul class="mb-0">
+            {% for type_key, type_data in sync_counts.items %}
+            <li>{{ type_data.label }}: {{ type_data.count }}</li>
+            {% endfor %}
+          </ul>
+          <strong>Total: {{ total_objects }}</strong>
+        </div>
+
+    {% if connections %}
+    <form id="sync-form">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="connection">Select AAS Connection:</label>
+        <select name="connection_id" id="connection" class="form-control" required>
+          <option value="">-- Select Connection --</option>
+          {% for conn in connections %}
+          <option value="{{ conn.id }}" {% if forloop.first %}selected{% endif %}>{{ conn.name }} ({{ conn.aas_api_url }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="base_url">NetBox Base URL:</label>
+        <input type="text" class="form-control" id="base_url" name="base_url" value="{{ default_base_url }}" required>
+        <small class="form-text text-muted">Used for generating AAS identifiers and product URIs (without http/https)</small>
+      </div>
+      
+      <div class="form-group">
+        <label for="urn_namespace">URN Namespace:</label>
+        <input type="text" class="form-control" id="urn_namespace" name="urn_namespace" value="{{ default_urn_namespace }}"  required>
+        <small class="form-text text-muted">Used as the domain part of URN identifiers (e.g., urn:&lt;namespace&gt;:aas:device_name)</small>
+      </div>
+
+      <div class="form-group">
+        <label for="sync_mode">Sync Mode:</label>
+         <select name="sync_mode" id="sync_mode" class="form-control" required>
+          <option value="">-- Select Sync Mode --</option>
+          {% for mode in sync_modes %}
+          <option value="{{ mode.value }}" {% if forloop.first %}selected{% endif %}>{{ mode.label }}: {{ mode.description }}</option>
+          {% endfor %}
+        </select>  
+      </div>
+
+      <div class="mt-3">
+        <button type="submit" class="btn btn-primary" id="sync-btn">
+          <i class="mdi mdi-sync"></i> Sync Now
+        </button>
+        <a href="{% url 'plugins:aas_integration:aasconnection_list' %}" class="btn btn-secondary">Back to Connections</a>
+      </div>
+    </form>
+    {% else %}
+    <div class="alert alert-warning">
+      No active AAS connections available. Please <a href="{% url 'plugins:aas_integration:aasconnection_create' %}">create a connection</a> first.
+    </div>
+    {% endif %}
+    
+        <div id="sync-results" class="mt-4" style="display:none;">
+          <h5>Sync Results</h5>
+          <div id="results-content"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block javascript %}
+<script>
+// Sync form submission with automatic validation
+document.getElementById('sync-form')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    performSync();
+});
+
+function performSync() {
+    const btn = document.getElementById('sync-btn');
+    const originalText = btn.innerHTML;
+    const connectionId = document.getElementById('connection').value;
+    const baseUrl = document.getElementById('base_url').value;
+    const urnNamespace = document.getElementById('urn_namespace').value;
+    const syncMode = document.getElementById('sync_mode').value;
+    
+    if (!connectionId) {
+        alert('Please select a connection');
+        return;
+    }
+    
+    if (!baseUrl) {
+        alert('Please enter a base URL');
+        return;
+    }
+    
+    if (!urnNamespace) {
+        alert('Please enter a URN namespace');
+        return;
+    }
+
+    if (!syncMode) {
+        alert('Please specify a Sync Mode');
+
+        return;
+    }
+    
+    // Disable button and show spinner
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Syncing...';
+    btn.classList.add('btn-loading');
+    
+    // Show sync in progress message
+    const resultsDiv = document.getElementById('sync-results');
+    const resultsContent = document.getElementById('results-content');
+    resultsContent.innerHTML = `
+        <div class="alert alert-info">
+            <i class="mdi mdi-loading mdi-spin"></i>
+            <strong>Synchronization in progress...</strong>
+            <p class="mb-0 mt-2">This may take a few moments. Please wait while assets are being synced to the AAS repository.</p>
+        </div>
+    `;
+    resultsDiv.style.display = 'block';
+    
+    const formData = new FormData();
+    formData.append('connection_id', connectionId);
+    formData.append('base_url', baseUrl);
+    formData.append('urn_namespace', urnNamespace);
+    formData.append('sync_mode', syncMode);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    fetch('{% url "plugins:aas_integration:sync_assets" %}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        btn.classList.remove('btn-loading');
+        
+        // Check if validation is required
+        if (!data.success && data.validation_required) {
+            showValidationIssues(data.issues, data.message);
+            return;
+        }
+        
+        // Handle normal sync results
+        const resultsDiv = document.getElementById('sync-results');
+        const resultsContent = document.getElementById('results-content');
+        
+        // Determine alert class based on success/partial_success
+        let alertClass = 'success';
+        if (!data.success && data.partial_success) {
+            alertClass = 'warning';
+        } else if (!data.success) {
+            alertClass = 'danger';
+        }
+        
+        let html = `<div class="alert alert-${alertClass}">
+            <strong>${data.message}</strong>
+        </div>`;
+
+        if (data.by_type) {
+            html += '<table class="table table-sm"><thead><tr>';
+            html += '<th>Type</th><th>Total</th><th>Created</th><th>Failed</th>';
+            html += '</tr></thead><tbody>';
+
+            for (const [typeKey, typeData] of Object.entries(data.by_type)) {
+                const rowClass = typeData.failed > 0 ? 'table-warning' : '';
+                html += `<tr class="${rowClass}">`;
+                html += `<td><strong>${typeData.label}</strong></td>`;
+                html += `<td>${typeData.total}</td>`;
+                html += `<td>${typeData.created}</td>`;
+                html += `<td>${typeData.failed}</td>`;
+                html += '</tr>';
+
+                if (typeData.errors && typeData.errors.length > 0) {
+                    html += `<tr><td colspan="4" class="text-danger"><small>`;
+                    html += `<strong>Errors:</strong> ${typeData.errors.join('; ')}`;
+                    html += `</small></td></tr>`;
+                }
+            }
+
+            html += '</tbody></table>';
+        }
+        
+        resultsContent.innerHTML = html;
+        resultsDiv.style.display = 'block';
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        btn.classList.remove('btn-loading');
+        alert('Sync failed: ' + e.message);
+    });
+}
+
+function showValidationIssues(issues, message) {
+    let html = '<ul class="list-unstyled">';
+
+    issues.forEach((issue) => {
+        html += `<li class="text-danger mb-2"><strong>${issue.description}</strong> - Affected: ${issue.object_names.join(', ')}</li>`;
+    });
+
+    html += '</ul>';
+
+    // Show validation issues in results area
+    const resultsDiv = document.getElementById('sync-results');
+    const resultsContent = document.getElementById('results-content');
+    resultsContent.innerHTML = html;
+    resultsDiv.style.display = 'block';
+}
+
+function cancelSync() {
+    const resultsDiv = document.getElementById('sync-results');
+    resultsDiv.style.display = 'none';
+}
+</script>
+{% endblock %}

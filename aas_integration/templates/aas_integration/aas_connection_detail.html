@@ -1,0 +1,22 @@
+{% extends "base/layout.html" %}
+
+{% block title %}{{ connection.name }}{% endblock %}
+
+{% block content %}
+<h1>{{ connection.name }}</h1>
+
+<table class="table table-striped">
+  <tr><th>Name</th><td>{{ connection.name }}</td></tr>
+  <tr><th>Description</th><td>{{ connection.description }}</td></tr>
+  <tr><th>AAS API URL</th><td><a href="{{ connection.aas_api_url }}" target="_blank">{{ connection.aas_api_url }}</a></td></tr>
+  <tr><th>Registry URL</th><td><a href="{{ connection.registry_api_url }}" target="_blank">{{ connection.registry_api_url }}</a></td></tr>
+  <tr><th>Discovery URL</th><td><a href="{{ connection.discovery_api_url }}" target="_blank">{{ connection.discovery_api_url }}</a></td></tr>
+  <tr><th>Status</th><td>{% if connection.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-secondary">Inactive</span>{% endif %}</td></tr>
+  <tr><th>Last Tested</th><td>{{ connection.last_tested|default:"Never" }}</td></tr>
+  <tr><th>Created</th><td>{{ connection.created }}</td></tr>
+</table>
+
+<a href="edit/" class="btn btn-warning">Edit</a>
+<a href="delete/" class="btn btn-danger">Delete</a>
+<a href="../" class="btn btn-secondary">Back</a>
+{% endblock %}
