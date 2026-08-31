@@ -89,12 +89,14 @@ cd dev-environment/
 
 # Start development environment
 docker compose up
-
-# Access services:
-# - Keycloak: http://keycloak.localhost:8080 (admin:admin)
-# - NetBox: http://localhost:8085 (admin:admin)
-# - AAS UI: http://localhost:3000
 ```
+
+### Deployed development/test services:
+
+- Keycloak: http://keycloak.localhost:8080 (admin:admin)
+- NetBox: http://localhost:8085 (admin:admin)
+- AAS UI: http://localhost:3000
+
 
 ## Support, Feedback, Contributing
 
