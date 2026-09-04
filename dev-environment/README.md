@@ -59,10 +59,10 @@ For comprehensive testing with netbox community [test data](https://github.com/n
 
 **Demo data includes:**
 
-- 10+ Sites across multiple regions
-- 20+ Manufacturers
-- 50+ Device Types
-- 100+ Devices
+- 20+ Sites across multiple regions
+- 10+ Manufacturers
+- 10+ Device Types
+- 70+ Devices
 - Racks, Cables, IP Addresses, VLANs, etc.
 - Complete realistic data hierarchy
 

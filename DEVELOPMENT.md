@@ -167,7 +167,7 @@ This command:
    - Test key rotation in staging first
 
 3. **Development/Testing**
-   - If you drop and recreate the database (e.g., via `reset-for-tests.sh`), no key rotation is needed
+   - If you drop and recreate the database, no key rotation is needed
    - The key should remain consistent across development sessions
 
 ## Project Structure
