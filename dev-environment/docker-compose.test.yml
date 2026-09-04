@@ -287,7 +287,7 @@ services:
       SKIP_SUPERUSER: false
 
       # API token configuration
-      API_TOKEN_PEPPERS: test-pepper-abcdefghijklmnopqrstuvwxyz0123456789
+      API_TOKEN_PEPPER_1: test-pepper-abcdefghijklmnopqrstuvwxyz0123456789
 
     ports:
       - "9085:8080"
@@ -317,7 +317,7 @@ services:
       DB_PASSWORD: netbox_test
       DB_HOST: postgres-test
       REDIS_HOST: netbox-redis-test
-      API_TOKEN_PEPPERS: test-pepper-abcdefghijklmnopqrstuvwxyz0123456789
+      API_TOKEN_PEPPER_1: test-pepper-abcdefghijklmnopqrstuvwxyz0123456789
     volumes:
       - ./netbox/configuration.py:/etc/netbox/config/configuration.py:ro
       - ./netbox/plugins.py:/etc/netbox/config/plugins.py:ro
